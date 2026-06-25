@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>仪表盘</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+    :root{
+        --primary:#2f6fed;
+        --accent:#66b1ff;
+        --font:Arial,Helvetica,sans-serif;
+        --radius:4px;
+        --gap:8px;
+        --pad:16px;
+    }
+    body{
+        margin:0;
+        font-family:var(--font);
+        background:#f5f8ff;
+        padding-top:calc(var(--pad)+8px);
+    }
+    .container{
+        max-width:960px;
+        margin:0 auto;
+        padding:var(--pad);
+    }
+    h1{
+        color:var(--primary);
+        margin-bottom:var(--gap);
+    }
+    .panel{
+        background:#fff;
+        border:1px solid #e0eaff;
+        border-radius:var(--radius);
+        padding:var(--pad);
+        margin-bottom:var(--gap);
+        box-shadow:0 2px 4px rgba(0,0,0,0.05);
+    }
+    .input-group{
+        display:flex;
+        gap:var(--gap);
+        margin-bottom:var(--gap);
+    }
+    .input-group input{
+        flex:1;
+        padding:8px;
+        border:1px solid #c0d4ff;
+        border-radius:var(--radius);
+        font-size:14px;
+    }
+    .input-group button{
+        padding:8px 12px;
+        background:var(--primary);
+        color:#fff;
+        border:none;
+        border-radius:var(--radius);
+        cursor:pointer;
+    }
+    .input-group button:hover{
+        background:var(--accent);
+    }
+    table{
+        width:100%;
+        border-collapse:collapse;
+    }
+    th,td{
+        padding:8px;
+        border-bottom:1px solid #e0eaff;
+        text-align:left;
+        font-size:14px;
+    }
+    th{
+        background:#f0f8ff;
+        color:var(--primary);
+    }
+    a.btn{
+        display:inline-block;
+        padding:4px 8px;
+        background:var(--accent);
+        color:#fff;
+        border-radius:var(--radius);
+        text-decoration:none;
+        font-size:13px;
+    }
+    a.btn:hover{
+        background:var(--primary);
+    }
+    .info{
+        font-size:14px;
+        color:#555;
+    }
+    .nav-links{
+        display:flex;
+        gap:var(--gap);
+        margin-top:var(--gap);
+    }
+    .nav-links a.btn{
+        padding:4px 8px;
+        background:var(--accent);
+        color:#fff;
+        border-radius:var(--radius);
+        text-decoration:none;
+        font-size:13px;
+    }
+    .nav-links a.btn:hover{
+        background:var(--primary);
+    }
+</style>
+<meta name="description" content="管理协作板和账户"><meta name="keywords" content="实时协作,涂鸦,Canvas,WebSocket,多人协作"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="仪表盘"><meta property="og:description" content="管理协作板和账户"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="仪表盘"><meta name="twitter:description" content="管理协作板和账户"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"仪表盘","description":"管理协作板和账户","applicationCategory":"UtilitiesApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"}}</script><style data-a2a="basecss">*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0}img,canvas,svg,video,table{max-width:100%;height:auto}pre,code{white-space:pre-wrap;word-break:break-word}[data-a2a="header"]{width:100%}@media(max-width:640px){body{font-size:15px}}</style></head>
+<body>
+<div class="container">
+    <h1>仪表盘</h1>
+
+    <div class="panel" id="navPanel">
+        <h2>快速导航</h2>
+        <div class="nav-links">
+            <a id="homeLink" class="btn" href="index.html">首页</a>
+            <a id="boardLink" class="btn" href="board.html">协作板</a>
+            <a id="profileLink" class="btn" href="profile.html">个人资料</a>
+        </div>
+    </div>
+
+    <div class="panel" id="userPanel">
+        <h2>账户信息</h2>
+        <div id="userInfo"></div>
+        <div id="authButtons"></div>
+    </div>
+
+    <div class="panel" id="boardPanel">
+        <h2>我的协作板</h2>
+        <div class="input-group">
+            <input type="text" id="newBoardName" placeholder="板块名称（可留空）">
+            <button id="createBoardBtn">创建新板块</button>
+        </div>
+        <table id="boardTable">
+            <thead>
+                <tr><th>名称</th><th>ID</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <p class="info">创建后会在地址栏显示唯一的板块 ID，复制链接即可邀请他人实时协作。</p>
+    </div>
+</div>
+
+<script>
+/* 简易用户系统（仅示例） */
+const USER_KEY = 'aa_user';
+function getUser(){ return JSON.parse(localStorage.getItem(USER_KEY)||'null'); }
+function setUser(u){ localStorage.setItem(USER_KEY, JSON.stringify(u)); }
+function clearUser(){ localStorage.removeItem(USER_KEY); }
+
+function renderUser(){
+    const infoDiv = document.getElementById('userInfo');
+    const btnDiv = document.getElementById('authButtons');
+    const profileLink = document.getElementById('profileLink');
+    const user = getUser();
+    if(user){
+        infoDiv.textContent = `已登录：${user.name} (${user.email})`;
+        btnDiv.innerHTML = `<button id="logoutBtn" style="padding:6px 10px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;">退出登录</button>`;
+        document.getElementById('logoutBtn').onclick = ()=>{ clearUser(); renderUser(); };
+        // 设置个人资料链接，优先使用 id，否则使用 email 作为标识
+        const id = user.id || user.email;
+        profileLink.href = `profile.html?id=${encodeURIComponent(id)}`;
+        profileLink.textContent = '个人资料';
+    }else{
+        infoDiv.textContent = '未登录';
+        btnDiv.innerHTML = `<a class="btn" href="login.html">登录</a> <a class="btn" href="register.html" style="margin-left:8px;">注册</a>`;
+        profileLink.href = 'profile.html';
+        profileLink.textContent = '个人资料';
+    }
+}
+
+/* Board 管理 */
+const BOARD_KEY = 'aa_boards';
+function loadBoards(){
+    return JSON.parse(localStorage.getItem(BOARD_KEY)||'[]');
+}
+function saveBoards(list){
+    localStorage.setItem(BOARD_KEY, JSON.stringify(list));
+}
+function generateId(){
+    return 'b'+Math.random().toString(36).substr(2,9);
+}
+function renderBoards(){
+    const tbody = document.querySelector('#boardTable tbody');
+    tbody.innerHTML = '';
+    const boards = loadBoards();
+    if(boards.length===0){
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.style.textAlign = 'center';
+        td.style.color = '#777';
+        td.textContent = '暂无协作板';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+    }
+    boards.forEach(b=>{
+        const tr = document.createElement('tr');
+        const nameTd = document.createElement('td');
+        nameTd.textContent = b.name||'（未命名）';
+        const idTd = document.createElement('td');
+        idTd.textContent = b.id;
+        const actTd = document.createElement('td');
+        actTd.innerHTML = `
+            <a class="btn" href="board.html?id=${b.id}">进入</a>
+            <a class="btn" href="board.html?id=${b.id}" style="margin-left:4px;">编辑</a>
+            <a class="btn" href="#" data-id="${b.id}" style="margin-left:4px;background:#e74c3c;">删除</a>
+        `;
+        actTd.querySelectorAll('a')[2].onclick = (e)=>{
+            e.preventDefault();
+            if(confirm('确定删除此板块？')){
+                const id = e.target.dataset.id;
+                const newList = loadBoards().filter(item=>item.id!==id);
+                saveBoards(newList);
+                renderBoards();
+            }
+        };
+        tr.append(nameTd,idTd,actTd);
+        tbody.appendChild(tr);
+    });
+}
+document.getElementById('createBoardBtn').onclick = ()=>{
+    const name = document.getElementById('newBoardName').value.trim();
+    if(name===''){ alert('板块名称不能为空'); return; }
+    const id = generateId();
+    const boards = loadBoards();
+    boards.push({name, id});
+    saveBoards(boards);
+    document.getElementById('newBoardName').value = '';
+    renderBoards();
+};
+
+/* 初始化 */
+renderUser();
+renderBoards();
+</script>
+<footer data-a2a="footer" style="margin-top:48px;padding:28px 16px;border-top:1px solid rgba(127,127,127,.16);text-align:center;font-family:system-ui,-apple-system,'PingFang SC',sans-serif;line-height:1.9;color:#8a8f99;background:transparent"><a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px"><img src="https://agent.oagi.com.cn/uploads/202606/29ea3ed5413830b3.png" alt="AutoA2A" style="height:36px;vertical-align:middle;border:0"></a><div style="font-size:13.5px;color:#6b7280;max-width:760px;margin:0 auto 6px">✅️ <b>AutoA2A</b> · 智能体互连 Agent to Agent 平台——让智能体无缝发现、协商、协作与安全交换数据，开启 AI 即服务新时代。</div><div style="font-size:13px">本网站由 <a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="color:#f2603c;text-decoration:none;font-weight:600">www.autoa2a.org</a> 多个 AI 协作生成</div><div style="font-size:12px;color:#aab;margin-top:6px">Copyright © 2025 - 2026 AutoA2A. All Rights Reserved. A2A版权所有</div></footer></body>
+</html>
