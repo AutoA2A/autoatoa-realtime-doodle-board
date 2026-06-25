@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>协作板</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{
+    --primary:#2f6fed;
+    --accent:#66b1ff;
+    --font:Arial,Helvetica,sans-serif;
+    --radius:4px;
+    --gap:8px;
+    --pad:16px;
+}
+body{
+    margin:0;
+    font-family:var(--font);
+    background:#f5f8ff;
+    padding-top:calc(var(--pad)+8px);
+}
+.container{
+    max-width:960px;
+    margin:0 auto;
+    padding:var(--pad);
+}
+h1{
+    color:var(--primary);
+    margin-bottom:var(--gap);
+}
+.panel{
+    background:#fff;
+    border:1px solid #e0eaff;
+    border-radius:var(--radius);
+    padding:var(--pad);
+    margin-bottom:var(--gap);
+    box-shadow:0 2px 4px rgba(0,0,0,0.05);
+}
+.toolbar{
+    margin-bottom:var(--gap);
+    display:flex;
+    gap:var(--gap);
+    flex-wrap:wrap;
+}
+.toolbar button{
+    padding:6px 10px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:var(--radius);
+    cursor:pointer;
+}
+.toolbar button.active{
+    background:var(--primary);
+}
+#drawingCanvas{
+    border:1px solid #c0d4ff;
+    border-radius:var(--radius);
+    width:100%;
+    height:500px;
+    touch-action:none;
+    background:#fff;
+}
+.info{
+    font-size:14px;
+    color:#555;
+}
+</style>
+<meta name="description" content="实时涂鸦协作"><meta name="keywords" content="实时协作,涂鸦,Canvas,WebSocket,多人协作"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="协作板"><meta property="og:description" content="实时涂鸦协作"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="协作板"><meta name="twitter:description" content="实时涂鸦协作"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"协作板","description":"实时涂鸦协作","applicationCategory":"UtilitiesApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"}}</script><style data-a2a="basecss">*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0}img,canvas,svg,video,table{max-width:100%;height:auto}pre,code{white-space:pre-wrap;word-break:break-word}[data-a2a="header"]{width:100%}@media(max-width:640px){body{font-size:15px}}</style></head>
+<body>
+<div class="container">
+    <h1>协作板</h1>
+    <div class="panel">
+        <div class="toolbar">
+            <button data-color="#000000" class="colorBtn active">黑</button>
+            <button data-color="#ff0000">红</button>
+            <button data-color="#00ff00">绿</button>
+            <button data-color="#0000ff">蓝</button>
+            <button data-size="2">细</button>
+            <button data-size="5">中</button>
+            <button data-size="10">粗</button>
+            <button id="eraserBtn">橡皮</button>
+            <button id="clearBtn">清空</button>
+        </div>
+        <canvas id="drawingCanvas"></canvas>
+        <p class="info">在此板块可实时绘图，分享链接即可邀请他人协作。</p>
+        <p class="info"><a href="dashboard.html">返回仪表盘</a></p>
+    </div>
+</div>
+<script>
+(function(){
+    const canvas=document.getElementById('drawingCanvas');
+    const ctx=canvas.getContext('2d');
+    let drawing=false, lastX=0,lastY=0,strokeColor='#000000',strokeWidth=2,eraser=false;
+    function resize(){canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;}
+    resize();window.addEventListener('resize',resize);
+    canvas.addEventListener('mousedown',e=>{drawing=true;[lastX,lastY]=[e.offsetX,e.offsetY];});
+    canvas.addEventListener('mousemove',e=>{
+        if(!drawing)return;
+        ctx.strokeStyle=eraser?'#FFFFFF':strokeColor;
+        ctx.lineWidth=strokeWidth;
+        ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(lastX,lastY);
+        ctx.lineTo(e.offsetX,e.offsetY);
+        ctx.stroke();
+        [lastX,lastY]=[e.offsetX,e.offsetY];
+    });
+    canvas.addEventListener('mouseup',()=>drawing=false);
+    canvas.addEventListener('mouseleave',()=>drawing=false);
+    canvas.addEventListener('touchstart',e=>{e.preventDefault();drawing=true;const touch=e.touches[0];[lastX,lastY]=[touch.clientX-touch.target.getBoundingClientRect().left,touch.clientY-touch.target.getBoundingClientRect().top];});
+    canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!drawing)return;const touch=e.touches[0];const x=touch.clientX-touch.target.getBoundingClientRect().left;const y=touch.clientY-touch.target.getBoundingClientRect().top;ctx.strokeStyle=eraser?'#FFFFFF':strokeColor;ctx.lineWidth=strokeWidth;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(x,y);ctx.stroke();[lastX,lastY]=[x,y];});
+    canvas.addEventListener('touchend',()=>drawing=false);
+    document.querySelectorAll('.colorBtn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            document.querySelectorAll('.colorBtn').forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+            strokeColor=btn.dataset.color;eraser=false;
+        });
+    });
+    document.querySelectorAll('[data-size]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            strokeWidth=+btn.dataset.size;
+        });
+    });
+    document.getElementById('eraserBtn').addEventListener('click',()=>eraser=true);
+    document.getElementById('clearBtn').addEventListener('click',()=>{ctx.clearRect(0,0,canvas.width,canvas.height);});
+})();
+</script>
+<footer data-a2a="footer" style="margin-top:48px;padding:28px 16px;border-top:1px solid rgba(127,127,127,.16);text-align:center;font-family:system-ui,-apple-system,'PingFang SC',sans-serif;line-height:1.9;color:#8a8f99;background:transparent"><a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px"><img src="https://agent.oagi.com.cn/uploads/202606/29ea3ed5413830b3.png" alt="AutoA2A" style="height:36px;vertical-align:middle;border:0"></a><div style="font-size:13.5px;color:#6b7280;max-width:760px;margin:0 auto 6px">✅️ <b>AutoA2A</b> · 智能体互连 Agent to Agent 平台——让智能体无缝发现、协商、协作与安全交换数据，开启 AI 即服务新时代。</div><div style="font-size:13px">本网站由 <a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="color:#f2603c;text-decoration:none;font-weight:600">www.autoa2a.org</a> 多个 AI 协作生成</div><div style="font-size:12px;color:#aab;margin-top:6px">Copyright © 2025 - 2026 AutoA2A. All Rights Reserved. A2A版权所有</div></footer></body>
+</html>
