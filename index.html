@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实时涂鸦协作板</title>
+<style>
+    :root{
+        --primary:#2f6fed;
+        --accent:#66b1ff;
+        --font:Arial,Helvetica,sans-serif;
+        --radius:4px;
+        --gap:8px;
+        --pad:16px;
+    }
+    body{
+        margin:0;
+        font-family:var(--font);
+        background:#f5f8ff;
+        padding-top:calc(var(--pad)+8px);
+    }
+    .container{
+        max-width:960px;
+        margin:0 auto;
+        padding:var(--pad);
+    }
+    h1{
+        color:var(--primary);
+        margin-bottom:var(--gap);
+    }
+    .nav-links{
+        margin-bottom:var(--gap);
+        display:flex;
+        gap:var(--gap);
+    }
+    .nav-links a{
+        padding:8px 12px;
+        background:var(--accent);
+        color:#fff;
+        border-radius:var(--radius);
+        text-decoration:none;
+        font-size:14px;
+    }
+    .nav-links a:hover{
+        background:var(--primary);
+    }
+    .panel{
+        background:#fff;
+        border:1px solid #e0eaff;
+        border-radius:var(--radius);
+        padding:var(--pad);
+        margin-bottom:var(--gap);
+        box-shadow:0 2px 4px rgba(0,0,0,0.05);
+    }
+    .input-group{
+        display:flex;
+        gap:var(--gap);
+        margin-bottom:var(--gap);
+    }
+    .input-group input{
+        flex:1;
+        padding:8px;
+        border:1px solid #c0d4ff;
+        border-radius:var(--radius);
+        font-size:14px;
+    }
+    .input-group button{
+        padding:8px 12px;
+        background:var(--primary);
+        color:#fff;
+        border:none;
+        border-radius:var(--radius);
+        cursor:pointer;
+    }
+    .input-group button:hover{
+        background:var(--accent);
+    }
+    #boardCanvas{
+        border:1px solid #c0d4ff;
+        border-radius:var(--radius);
+        width:100%;
+        height:500px;
+        touch-action:none;
+        background:#fff;
+    }
+    .toolbar{
+        margin-bottom:var(--gap);
+        display:flex;
+        gap:var(--gap);
+        flex-wrap:wrap;
+    }
+    .toolbar button{
+        padding:6px 10px;
+        background:var(--accent);
+        color:#fff;
+        border:none;
+        border-radius:var(--radius);
+        cursor:pointer;
+    }
+    .toolbar button.active{
+        background:var(--primary);
+    }
+    .info{
+        font-size:14px;
+        color:#555;
+    }
+</style>
+<meta name="description" content="创建或加入协作板"><meta name="keywords" content="实时协作,涂鸦,Canvas,WebSocket,多人协作"><meta name="robots" content="index,follow,max-image-preview:large"><meta property="og:type" content="website"><meta property="og:title" content="实时涂鸦协作板"><meta property="og:description" content="创建或加入协作板"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="实时涂鸦协作板"><meta name="twitter:description" content="创建或加入协作板"><script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"实时涂鸦协作板","description":"创建或加入协作板","applicationCategory":"UtilitiesApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"}}</script><style data-a2a="basecss">*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0}img,canvas,svg,video,table{max-width:100%;height:auto}pre,code{white-space:pre-wrap;word-break:break-word}[data-a2a="header"]{width:100%}@media(max-width:640px){body{font-size:15px}}</style></head>
+<body>
+<div class="container">
+    <h1>实时涂鸦协作板</h1>
+    <div class="nav-links">
+        <a href="dashboard.html">返回仪表盘</a>
+        <a href="board.html">进入涂鸦板</a>
+    </div>
+
+    <div class="panel" id="joinPanel">
+        <h2>创建或加入协作板</h2>
+        <div class="input-group">
+            <input type="text" id="boardIdInput" placeholder="输入板块 ID（留空自动创建）">
+            <button id="enterBtn">进入板块</button>
+        </div>
+        <p class="info">创建后会在地址栏显示唯一的板块 ID，分享此链接即可邀请他人实时协作。</p>
+    </div>
+
+    <div class="panel" id="boardPanel" style="display:none;">
+        <div class="toolbar">
+            <button data-color="#000000" style="background:#000;" class="colorBtn active"></button>
+            <button data-color="#ff0000" style="background:#f00;" class="colorBtn"></button>
+            <button data-color="#00ff00" style="background:#0f0;" class="colorBtn"></button>
+            <button data-color="#0000ff" style="background:#00f;" class="colorBtn"></button>
+            <button data-color="#ff00ff" style="background:#f0f;" class="colorBtn"></button>
+            <button id="clearBtn">清空画布</button>
+            <button id="downloadBtn">下载图片</button>
+        </div>
+        <canvas id="boardCanvas"></canvas>
+        <p class="info">板块 ID：<span id="currentId"></span> | <a id="shareLink" href="#" target="_blank">复制分享链接</a></p>
+    </div>
+</div>
+
+<script>
+(() => {
+    const boardIdInput = document.getElementById('boardIdInput');
+    const enterBtn = document.getElementById('enterBtn');
+    const joinPanel = document.getElementById('joinPanel');
+    const boardPanel = document.getElementById('boardPanel');
+    const canvas = document.getElementById('boardCanvas');
+    const ctx = canvas.getContext('2d');
+    const colorBtns = document.querySelectorAll('.colorBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const currentIdSpan = document.getElementById('currentId');
+    const shareLink = document.getElementById('shareLink');
+
+    let drawing = false;
+    let lastPos = {x:0, y:0};
+    let strokeColor = '#000000';
+    let boardId = null;
+    const dpr = window.devicePixelRatio || 1;
+    const bc = new BroadcastChannel('draw_channel');
+
+    // 设置画布尺寸（考虑 DPR）
+    function resizeCanvas(){
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        ctx.setTransform(1,0,0,1,0,0); // reset
+        ctx.scale(dpr, dpr);
+        // 读取历史绘制
+        if(boardId){
+            const saved = localStorage.getItem('board_'+boardId);
+            if(saved){
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img,0,0);
+                };
+                img.src = saved;
+            }
+        }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // 颜色选择
+    colorBtns.forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            colorBtns.forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+            strokeColor = btn.dataset.color;
+        });
+    });
+
+    // 清空
+    clearBtn.addEventListener('click',()=>{
+        ctx.clearRect(0,0,canvas.width/canvas.height?canvas.width:canvas.width, canvas.height);
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        broadcast({type:'clear'});
+        saveBoard();
+    });
+
+    // 下载
+    downloadBtn.addEventListener('click',()=>{
+        const link=document.createElement('a');
+        link.download='board.png';
+        link.href=canvas.toDataURL('image/png');
+        link.click();
+    });
+
+    // 进入板块
+    function enterBoard(id){
+        boardId = id;
+        currentIdSpan.textContent = boardId;
+        const url = new URL(location);
+        url.searchParams.set('id',boardId);
+        history.replaceState(null,'',url);
+        shareLink.href = url;
+        shareLink.textContent = '复制分享链接';
+        shareLink.onclick = (e)=>{
+            e.preventDefault();
+            navigator.clipboard.writeText(url.toString()).then(()=>{
+                shareLink.textContent='已复制！';
+                setTimeout(()=>{shareLink.textContent='复制分享链接';},2000);
+            });
+        };
+        joinPanel.style.display='none';
+        boardPanel.style.display='block';
+        resizeCanvas();
+    }
+
+    // 生成唯一 ID
+    function generateId(){
+        return 'b'+Math.random().toString(36).substr(2,9);
+    }
+
+    // 保存到本地
+    function saveBoard(){
+        if(!boardId) return;
+        try{
+            const data = canvas.toDataURL();
+            localStorage.setItem('board_'+boardId,data);
+        }catch(e){}
+    }
+
+    // 广播
+    function broadcast(msg){
+        bc.postMessage({boardId, ...msg});
+    }
+
+    // 接收广播
+    bc.onmessage = e=>{
+        if(e.data.boardId!==boardId) return;
+        const msg=e.data;
+        if(msg.type==='stroke'){
+            const {x0,y0,x1,y1,color}=msg;
+            ctx.strokeStyle=color;
+            ctx.lineWidth=2;
+            ctx.beginPath();
+            ctx.moveTo(x0,y0);
+            ctx.lineTo(x1,y1);
+            ctx.stroke();
+        }else if(msg.type==='clear'){
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
+    };
+
+    // 获取相对于 canvas 的坐标（已乘 DPR）
+    function getPointerPos(e){
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * dpr;
+        const y = (e.clientY - rect.top) * dpr;
+        return {x,y};
+    }
+
+    // 绘图事件（使用 Pointer Events 兼容 mouse/touch/pen）
+    function startDraw(e){
+        e.preventDefault();
+        drawing = true;
+        const pos = getPointerPos(e);
+        lastPos = pos;
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
+    }
+    function drawMove(e){
+        if(!drawing) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        broadcast({type:'stroke', x0:lastPos.x, y0:lastPos.y, x1:pos.x, y1:pos.y, color:strokeColor});
+        lastPos = pos;
+    }
+    function endDraw(){
+        if(!drawing) return;
+        drawing = false;
+        saveBoard();
+    }
+
+    canvas.addEventListener('pointerdown', startDraw);
+    canvas.addEventListener('pointermove', drawMove);
+    canvas.addEventListener('pointerup', endDraw);
+    canvas.addEventListener('pointerleave', endDraw);
+
+    // 初始化：检查 URL 参数
+    (()=>{
+        const url = new URL(location);
+        const id = url.searchParams.get('id');
+        if(id){
+            enterBoard(id);
+        }else{
+            joinPanel.style.display='block';
+            boardPanel.style.display='none';
+        }
+    })();
+
+    enterBtn.addEventListener('click',()=>{
+        const id = boardIdInput.value.trim() || generateId();
+        enterBoard(id);
+    });
+})();
+</script>
+<footer data-a2a="footer" style="margin-top:48px;padding:28px 16px;border-top:1px solid rgba(127,127,127,.16);text-align:center;font-family:system-ui,-apple-system,'PingFang SC',sans-serif;line-height:1.9;color:#8a8f99;background:transparent"><a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px"><img src="https://agent.oagi.com.cn/uploads/202606/29ea3ed5413830b3.png" alt="AutoA2A" style="height:36px;vertical-align:middle;border:0"></a><div style="font-size:13.5px;color:#6b7280;max-width:760px;margin:0 auto 6px">✅️ <b>AutoA2A</b> · 智能体互连 Agent to Agent 平台——让智能体无缝发现、协商、协作与安全交换数据，开启 AI 即服务新时代。</div><div style="font-size:13px">本网站由 <a href="https://www.autoa2a.org" target="_blank" rel="noopener" style="color:#f2603c;text-decoration:none;font-weight:600">www.autoa2a.org</a> 多个 AI 协作生成</div><div style="font-size:12px;color:#aab;margin-top:6px">Copyright © 2025 - 2026 AutoA2A. All Rights Reserved. A2A版权所有</div></footer></body>
+</html>
